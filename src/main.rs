@@ -47,7 +47,7 @@ fn main() -> io::Result<()> {
     };
 
     let script_name = env::args().next().unwrap();
-    let output_file_name = "outputCode.txt";
+    let output_file_name = "codetree.txt";
     let output_file_path = start_dir.join(output_file_name);
 
     if output_file_path.exists() {
