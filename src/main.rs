@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
-const EXCLUDED_DIRS: [&str; 19] = [
+const EXCLUDED_DIRS: [&str; 20] = [
     ".idea",
     ".git",
     ".github",
@@ -21,21 +21,31 @@ const EXCLUDED_DIRS: [&str; 19] = [
     "build",
     "cache",
     "dist",
+    "fonts",
     "obj",
     "out",
     "target",
     "vendor",
 ];
 
-const EXCLUDED_FILES: [&str; 8] = [
-    "package-lock.json",
-    "yarn.lock",
-    "Cargo.lock",
-    "pnpm-lock.yaml",
+const EXCLUDED_FILES: [&str; 17] = [
     ".DS_Store",
-    "thumbs.db",
+    ".eslintrc.json",
     ".gitignore",
     ".npmignore",
+    "Cargo.lock",
+    "favicon.ico",
+    "globals.css",
+    "next.config.mjs",
+    "next-env.d.ts",
+    "postcss.config.mjs",
+    "README.md",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "tailwind.config.ts",
+    "thumbs.db",
+    "tsconfig.json",
+    "yarn.lock",
 ];
 
 fn main() -> io::Result<()> {
