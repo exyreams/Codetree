@@ -28,23 +28,30 @@ const EXCLUDED_DIRS: [&str; 20] = [
     "vendor",
 ];
 
-const EXCLUDED_FILES: [&str; 17] = [
+const EXCLUDED_FILES: [&str; 24] = [
     ".DS_Store",
     ".eslintrc.json",
     ".gitignore",
     ".npmignore",
     "Cargo.lock",
+    "eslint.config.js",
     "favicon.ico",
     "globals.css",
     "next.config.mjs",
     "next-env.d.ts",
+    "postcss.config.js",
     "postcss.config.mjs",
     "README.md",
     "package-lock.json",
     "pnpm-lock.yaml",
+    "tailwind.config.js",
     "tailwind.config.ts",
+    "tsconfig.app.json",
+    "tsconfig.node.json",
+    "tsconfig.json",
     "thumbs.db",
     "tsconfig.json",
+    "vite.config.ts",
     "yarn.lock",
 ];
 
