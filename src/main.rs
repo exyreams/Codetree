@@ -13,7 +13,7 @@ const EXCLUDED_DIRS: [&str; 21] = [
     ".next",
     ".vscode",
     ".target",
-    ".zig",
+    ".zig-cache",
     "node_modules",
     "assets",
     "asset",
