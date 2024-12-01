@@ -28,8 +28,9 @@ const EXCLUDED_DIRS: [&str; 20] = [
     "vendor",
 ];
 
-const EXCLUDED_FILES: [&str; 24] = [
+const EXCLUDED_FILES: [&str; 25] = [
     ".DS_Store",
+    ".env",
     ".eslintrc.json",
     ".gitignore",
     ".npmignore",
