@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
-const EXCLUDED_DIRS: [&str; 20] = [
+const EXCLUDED_DIRS: [&str; 21] = [
     ".idea",
     ".git",
     ".github",
@@ -13,6 +13,7 @@ const EXCLUDED_DIRS: [&str; 20] = [
     ".next",
     ".vscode",
     ".target",
+    ".zig",
     "node_modules",
     "assets",
     "asset",
