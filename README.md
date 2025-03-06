@@ -2,16 +2,26 @@
 
 Codetree is a powerful Rust-based command-line tool that generates a comprehensive overview of your project's file structure, code statistics, and contents. It intelligently analyzes your codebase, detecting frameworks and project types while automatically protecting sensitive information.
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/exyreams/Codetree)](https://github.com/exyreams/Codetree/releases/latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-
+<div align="center">
+  
+<pre>
 ░█████╗░░█████╗░██████╗░███████╗████████╗██████╗░███████╗███████╗
 ██╔══██╗██╔══██╗██╔══██╗██╔════╝╚══██╔══╝██╔══██╗██╔════╝██╔════╝
 ██║░░╚═╝██║░░██║██║░░██║█████╗░░░░░██║░░░██████╔╝█████╗░░█████╗░░
 ██║░░██╗██║░░██║██║░░██║██╔══╝░░░░░██║░░░██╔══██╗██╔══╝░░██╔══╝░░
 ╚█████╔╝╚█████╔╝██████╔╝███████╗░░░██║░░░██║░░██║███████╗███████╗
 ░╚════╝░░╚════╝░╚═════╝░╚══════╝░░░╚═╝░░░╚═╝░░╚═╝╚══════╝╚══════╝
+</pre>
+
+</div>
+<p align="center">
+  <a href="https://github.com/exyreams/Codetree/releases/latest">
+    <img src="https://img.shields.io/github/v/release/exyreams/Codetree" alt="GitHub release (latest by date)">
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  </a>
+</p>
 
 
 ## 🚀 What's New in v2.0.0
