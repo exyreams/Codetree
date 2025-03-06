@@ -155,7 +155,7 @@ Contributions are welcome! Feel free to:
 
 ## 📜 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the **[MIT License](https://github.com/exyreams/Codetree?tab=MIT-1-ov-file)** - see the LICENSE file for details.
 
 ---
 
