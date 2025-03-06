@@ -1,7 +1,3 @@
-# Codetree
-
-Codetree is a powerful Rust-based command-line tool that generates a comprehensive overview of your project's file structure, code statistics, and contents. It intelligently analyzes your codebase, detecting frameworks and project types while automatically protecting sensitive information.
-
 <div align="center">
   
 <pre>
@@ -23,7 +19,7 @@ Codetree is a powerful Rust-based command-line tool that generates a comprehensi
   </a>
 </p>
 
-
+Codetree is a powerful Rust-based command-line tool that generates a comprehensive overview of your project's file structure, code statistics, and contents. It intelligently analyzes your codebase, detecting frameworks and project types while automatically protecting sensitive information.
 ## 🚀 What's New in v2.0.0
 
 Our latest release includes:
