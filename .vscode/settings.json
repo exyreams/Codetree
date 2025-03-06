@@ -1,12 +1,23 @@
 {
     "cSpell.words": [
+        "apikey",
         "Chakra",
         "codetree",
         "Codetree",
         "exyreams",
+        "fastapi",
+        "fastify",
+        "Fastify",
         "Laravel",
+        "mobx",
+        "npmignore",
         "pycache",
+        "pyproject",
         "Pytest",
-        "venv"
+        "sqlalchemy",
+        "Symfony",
+        "venv",
+        "vite",
+        "walkdir"
     ]
 }
