@@ -1,78 +1,138 @@
-
 # Codetree
 
-CodeTree is a Rust-based command-line tool that generates a comprehensive overview of a project's file structure and contents. It's designed to help developers quickly understand and document the layout and code of their projects.
+Codetree is a powerful Rust-based command-line tool that generates a comprehensive overview of your project's file structure, code statistics, and contents. It intelligently analyzes your codebase, providing valuable insights while automatically protecting sensitive information.
 
-## Why this tool?
-Tired of the tedious task of manually creating file structures and populating them with code snippets when sharing your projects with LLMs or collaborators?  This tool automates that process, saving you valuable time and effort.
+## Features
 
-Imagine needing to provide your entire project's codebase to an LLM for analysis or to a colleague for review.  Manually copying and pasting each file's contents into a single text file is cumbersome and error-prone.  This tool eliminates that friction.
+- **Intelligent Project Detection**: Automatically identifies project types (Rust, Node.js, Python, Java, etc.) and adjusts analysis accordingly
+- **Comprehensive Code Statistics**: Tracks total lines, code lines, comments, blank lines, and more
+- **File Type Analysis**: Provides breakdowns of files and lines by language/extension
+- **Environment Variable Protection**: Automatically detects and protects sensitive information
+- **Visual File Tree**: Generates a clear, hierarchical view of your project structure
+- **Complete Source Extraction**: Compiles all source code into a single, searchable document
+- **Smart Build Directory Exclusion**: Automatically excludes build artifacts based on project type
 
-This Rust application generates a representative file tree mirroring the structure of a typical full-stack application (as shown in the example above) and compiles all the code into a single, easy-to-share `.txt` file. This makes sharing your code with LLMs, for tasks like code review, debugging, or generation of new code remarkably streamlined. No more tedious manual copying and pasting; instead, you'll have all the contextual information available at your fingertips, for immediate access to the source code,  without needing to reconstruct the directory structures.
+## Why Use Codetree?
 
-**Stop wasting time on repetitive tasks and start focusing on what truly matters: building your application!  And it works on every OS.**
+Sharing your codebase with AI assistants or collaborators typically requires tedious manual copying of files and explaining directory structures. Codetree eliminates this friction by:
 
+1. Automatically generating a complete representation of your project structure
+2. Collecting all source code into a single, well-organized document
+3. Providing insightful statistics about your codebase
+4. Protecting sensitive information like API keys and credentials
+
+Whether you're seeking code review from an LLM, sharing with colleagues, or documenting your project, Codetree streamlines the process while ensuring security.
 
 ## Installation
 
-1. **Ensure you have Rust installed on your system.** If not, install it from [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+### Prerequisites
 
-2. **For Windows Users (Easiest Method):**
+- Rust and Cargo installed on your system ([install from rust-lang.org](https://www.rust-lang.org/tools/install))
 
-    Download the latest Windows release directly from the [Releases page](https://github.com/exyreams/Codetree/releases). Download the `.exe` file and run it.
+### Method 1: Install from crates.io
 
+```bash
+cargo install codetree
+```
 
-3. **For All Other Users (Compile from Source):**
+### Method 2: Build from Source
 
-   a. Clone this repository:
-   ```bash
-   git clone https://github.com/exyreams/Codetree.git
-   cd Codetree
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/exyreams/Codetree.git
+cd Codetree
 
-   b. Build the project:
-   ```bash
-   cargo build --release
-   ```
+# Build the project
+cargo build --release
 
-4. **Run the project:**
-
-   ```bash
-   cargo run <PATH>
-   ```
-
+# The binary will be available at ./target/release/codetree
+```
 
 ## Usage
 
-Run CodeTree using one of the following commands:
+### Basic Usage
 
-1. To analyze the current directory:
-   ```bash
-   cargo run
-   ```
+To analyze the current directory:
 
-2. To analyze a specific directory:
-   - On Unix-like systems (Linux, macOS):
-     ```bash
-     cargo run /path/to/your/directory
-     ```
-        eg:  `cargo run /home/Desktop/Codetree`
-   - On Windows:
-     ```bash
-     cargo run -- C:\path\to\your\directory
-     ```
-     eg:  `cargo run D:\Projects\Codetree`
+```bash
+codetree
+```
 
-The tool will generate an `codetree.txt` file in the analyzed directory, containing the file tree and the contents of each file.
+To analyze a specific directory:
 
-## Output
+```bash
+codetree /path/to/your/project
+```
 
-The `codetree.txt` file will contain:
+### Windows-specific Example
 
-1. A visual representation of the project's file structure
-2. The contents of each file in the project, excluding the script itself and the output file
+```bash
+codetree.exe C:\path\to\your\project
+```
+
+### Output
+
+Codetree will generate a `codetree.txt` file in the target directory containing:
+
+1. Project type detection information
+2. A visual representation of the project's file structure
+3. Comprehensive code statistics
+4. File type breakdown
+5. The contents of each file (with sensitive information protected)
+
+## Example Output
+
+```
+Project File Tree:
+
+Detected Project Types: Rust, JavaScript/Node.js
+Auto-excluded build directories: target, node_modules, dist, build
+
+├── src/
+│   ├── main.rs
+│   └── utils/
+│       └── helpers.rs
+├── tests/
+│   └── integration_test.rs
+└── Cargo.toml
+
+Project Statistics:
+==================
+Total Files: 4
+Total Lines of Code: 235
+  - Code Lines: 198 (84.3%)
+  - Comment Lines: 22 (9.4%)
+  - Blank Lines: 15 (6.3%)
+Total Size: 8.32 KB
+
+Files by Type:
+  .rs: 3 files, 215 lines
+  .toml: 1 file, 20 lines
+
+Project Codes:
+...
+```
+
+## Security Features
+
+Codetree automatically protects sensitive information by:
+
+1. Detecting common environment variable files (`.env`, etc.)
+2. Identifying files with sensitive keywords (API keys, tokens, passwords)
+3. Hiding the contents of these files in the output while maintaining statistics
 
 ## Customization
 
-- You can modify the `EXCLUDED_DIRS` constant in the source code to adjust which directories are excluded from the analysis.  If you add or remove directories, ensure you update the `[&str; 19]` value accordingly; the number of items in the array must match.
-- You can modify the `EXCLUDED_FILES` constant in the source code to adjust which files are excluded from the analysis.  If you add or remove files, ensure you update the `[&str; 8]` value accordingly; the number of items in the array must match.
+You can modify the source code to:
+
+- Add or remove directories from the exclusion list
+- Customize sensitive file detection patterns
+- Adjust the project type detection rules
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
