@@ -71,20 +71,6 @@ const SENSITIVE_FILES: [&str; 15] = [
     "application.properties",
 ];
 
-/// Keywords that suggest sensitive content in a file
-const SENSITIVE_KEYWORDS: [&str; 10] = [
-    "api_key",
-    "apikey",
-    "secret",
-    "password",
-    "token",
-    "credential",
-    "auth",
-    "private_key",
-    "access_key",
-    "connection_string",
-];
-
 /// Structure for tracking detected frameworks
 struct FrameworkDetection {
     /// Map of detected frameworks and their versions
@@ -863,7 +849,7 @@ fn is_likely_comment(line: &str, path: &Path) -> bool {
 /// # Returns
 ///
 /// * `bool` - True if the file might contain sensitive information
-fn might_contain_sensitive_info(path: &Path, content: Option<&str>) -> bool {
+fn might_contain_sensitive_info(path: &Path, _content: Option<&str>) -> bool {
     let file_name = path
         .file_name()
         .unwrap_or_default()
@@ -873,17 +859,6 @@ fn might_contain_sensitive_info(path: &Path, content: Option<&str>) -> bool {
     // Check if filename matches known sensitive files
     if SENSITIVE_FILES.iter().any(|f| file_name.ends_with(f)) {
         return true;
-    }
-
-    // Check content for sensitive keywords if content is provided
-    if let Some(content) = content {
-        let lower_content = content.to_lowercase();
-        if SENSITIVE_KEYWORDS
-            .iter()
-            .any(|keyword| lower_content.contains(keyword))
-        {
-            return true;
-        }
     }
 
     false
