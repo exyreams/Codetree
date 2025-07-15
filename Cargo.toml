@@ -1,8 +1,19 @@
 [package]
 name = "codetree"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
 regex = "1.11.1"
 walkdir = "2.5.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+clap = { version = "4.5.41", features = ["derive"] }
+chrono = { version = "0.4.41", features = ["serde"] }
+handlebars = "6.3.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = ["fileapi", "handleapi", "winbase", "winnt"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.174"
