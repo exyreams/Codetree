@@ -20,15 +20,33 @@
 </p>
 
 Codetree is a powerful Rust-based command-line tool that generates a comprehensive overview of your project's file structure, code statistics, and contents. It intelligently analyzes your codebase, detecting frameworks and project types while automatically protecting sensitive information.
-## 🚀 What's New in v2.0.0
+## 🚀 Key Features
 
-Our latest release includes:
+Codetree offers comprehensive codebase analysis with these powerful features:
 
-- **Framework Detection**: Automatically identifies 20+ frameworks including React, Vue, Angular, Next.js, Three.js, Django, and more
-- **Enhanced Project Type Detection**: Detects Rust, Node.js, Python, Java, .NET, Go, Ruby, and PHP projects
-- **Build Directory Auto-Exclusion**: Intelligently excludes build directories based on project type
-- **Security Enhancements**: Detects and protects sensitive information like API keys and credentials
-- **Improved Statistics**: Detailed breakdown of code, comments, and blank lines
+- **Multiple Output Formats**: Generate reports in Text, JSON, Markdown, or interactive HTML formats
+- **Interactive HTML Reports**: Beautiful, responsive web interface with collapsible sections, search functionality, and syntax highlighting
+- **Advanced Framework Detection**: Automatically identifies 25+ frameworks including React, Vue, Angular, Next.js, Three.js, Django, Flask, Spring Boot, and more
+- **Intelligent Project Type Detection**: Detects Rust, Node.js, Python, Java, .NET, Go, Ruby, and PHP projects with automatic build directory exclusion
+- **Enhanced Security**: Detects and protects 15+ types of sensitive files including environment variables, API keys, and configuration files
+- **Comprehensive Statistics**: 
+  - Detailed breakdown of code, comments, and blank lines with percentage calculations
+  - **Advanced Cross-Platform File Size Analysis**: Real disk usage detection that accounts for:
+    - File system compression (Windows NTFS compression, etc.)
+    - Sparse file handling on Unix systems
+    - Accurate disk block allocation vs logical file size
+    - Cross-platform compatibility with Windows API and Unix system calls
+  - Dual size tracking: both filesystem size and UTF-8 content size
+  - Average file size calculations and top 10 largest files identification
+  - Statistics breakdown by file extension and programming language
+  - **Enhanced Exclusion Tracking**: Comprehensive reporting of excluded content including:
+    - Total size of all excluded directories and files
+    - Detailed breakdown of excluded build directories (node_modules, target, etc.) with size and file count
+    - Top 10 largest excluded directories sorted by size with exclusion reasons
+    - Top 10 largest excluded files with individual file sizes
+    - Complete visibility into what content is being filtered out for better project understanding
+- **Smart Content Analysis**: Line-by-line analysis with comment detection for multiple programming languages
+- **Structured Data Export**: JSON output for integration with CI/CD pipelines and automated analysis tools
 
 **[Check out the latest release](https://github.com/exyreams/Codetree/releases/latest)**
 
@@ -55,8 +73,8 @@ Perfect for:
 **[Download the latest release](https://github.com/exyreams/Codetree/releases/latest)**
 
 Choose the appropriate binary for your system:
-- `codetree-v2.0.0-windows.exe` for Windows
-- `codetree-v2.0.0-linux` for Linux
+- `codetree-v0.3.0-windows.exe` for Windows
+- `codetree-v0.3.0-linux` for Linux
 
 ### Option 2: Build from Source
 
@@ -93,13 +111,34 @@ To analyze a specific directory:
 codetree /path/to/your/project
 ```
 
+### Output Format Options
+
+Codetree now supports multiple output formats:
+
+```bash
+# Generate interactive HTML report (recommended for viewing)
+codetree --format html
+
+# Generate JSON output for programmatic use
+codetree --format json
+
+# Generate Markdown report
+codetree --format markdown
+
+# Generate traditional text output (default)
+codetree --format text
+```
+
 ### Windows Examples
 
 ```bash
-# Current directory
-codetree.exe
+# Current directory with HTML output
+codetree.exe --format html
 
-# Specific directory
+# Specific directory with JSON output
+codetree.exe C:\path\to\your\project --format json
+
+# Traditional text output
 codetree.exe C:\path\to\your\project
 ```
 
@@ -118,10 +157,15 @@ Codetree intelligently detects:
 
 ### Comprehensive Code Statistics
 
-- Total files and lines of code
-- Breakdown of code, comment, and blank lines
-- Files and lines by language/extension
-- Project size metrics
+- **File Analysis**: Total files count with detailed breakdown by extension
+- **Line Analysis**: Complete breakdown of code, comment, and blank lines with percentage calculations
+- **Size Metrics**: 
+  - Total filesystem size vs content size comparison
+  - Average file size calculations
+  - Top 10 largest files identification
+  - Size breakdown by file extension and language
+- **Language Detection**: Automatic detection and statistics for multiple programming languages
+- **Content Quality**: Code-to-comment ratio analysis and blank line percentage tracking
 
 ### Security Features
 
@@ -140,14 +184,39 @@ Based on your project type, Codetree automatically excludes:
 - `bin` and `obj` for .NET projects
 - And many more
 
-## 📋 Output
+## 📋 Output Formats
 
-Codetree generates a `codetree.txt` file in the analyzed directory containing:
+Codetree generates reports in multiple formats, each optimized for different use cases:
 
-1. Project type and framework detection information
-2. A visual representation of the project's file structure
-3. Comprehensive code statistics
-4. The contents of each file (with sensitive information protected)
+### 📄 Text Format (Default)
+Generates `codetree.txt` - the classic format perfect for AI assistants and simple sharing:
+- Project type and framework detection information
+- Visual directory tree structure
+- Comprehensive code statistics
+- All source code content with sensitive information protected
+
+### 🌐 HTML Format (Interactive)
+Generates `codetree.html` - a beautiful, interactive web report featuring:
+- **Responsive Design**: Works perfectly on desktop and mobile
+- **Collapsible Sections**: Organize content with expandable overview, structure, and files sections
+- **Search Functionality**: Quickly find specific files with real-time search
+- **Syntax Highlighting**: Code is displayed with appropriate language detection
+- **File Statistics**: Individual file sizes and line counts
+- **Modern UI**: Clean, professional interface with gradient styling
+
+### 📊 JSON Format (Structured Data)
+Generates `codetree.json` - machine-readable format for integration:
+- Complete project metadata
+- Structured file information with metadata
+- Statistics in programmatic format
+- Perfect for CI/CD pipelines and automated analysis
+
+### 📝 Markdown Format
+Generates `codetree.md` - documentation-friendly format:
+- GitHub-compatible markdown
+- Structured sections with proper headers
+- Code blocks with syntax highlighting
+- Ideal for project documentation and README files
 
 ## 🤝 Contributing
 
