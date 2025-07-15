@@ -9,7 +9,15 @@
 //! - Project type and framework detection
 //! - All source code content with sensitive information protection
 
+mod output;
+
+use clap::{Arg, Command};
+use output::{
+    formats::TextGenerator, html::HtmlGenerator, json::JsonGenerator, markdown::MarkdownGenerator,
+    FileInfo, OutputFormat, OutputGenerator, ProjectReport,
+};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
@@ -17,6 +25,128 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
+
+/// Formats a file size in bytes into a human-readable string
+fn format_size(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    const THRESHOLD: u64 = 1024;
+
+    if bytes == 0 {
+        return "0 B".to_string();
+    }
+
+    let mut size = bytes as f64;
+    let mut unit_index = 0;
+
+    while size >= THRESHOLD as f64 && unit_index < UNITS.len() - 1 {
+        size /= THRESHOLD as f64;
+        unit_index += 1;
+    }
+
+    if unit_index == 0 {
+        format!("{} {}", bytes, UNITS[unit_index])
+    } else {
+        format!("{:.1} {}", size, UNITS[unit_index])
+    }
+}
+
+/// Calculates the total size and file count of a directory recursively
+fn calculate_directory_size(dir_path: &Path) -> io::Result<(u64, usize)> {
+    let mut total_size = 0u64;
+    let mut file_count = 0usize;
+
+    for entry in WalkDir::new(dir_path).into_iter().filter_map(|e| e.ok()) {
+        if entry.file_type().is_file() {
+            file_count += 1;
+            if let Ok(size) = get_real_file_size(entry.path()) {
+                total_size += size;
+            }
+        }
+    }
+
+    Ok((total_size, file_count))
+}
+
+// Platform-specific imports for real file size detection
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use winapi::um::fileapi::{GetCompressedFileSizeW, GetFileAttributesW, INVALID_FILE_SIZE, INVALID_FILE_ATTRIBUTES};
+#[cfg(windows)]
+use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
+
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
+/// Gets the real file size on disk (cross-platform)
+/// This accounts for file system allocation, compression, sparse files, etc.
+fn get_real_file_size(path: &Path) -> io::Result<u64> {
+    #[cfg(windows)]
+    {
+        get_real_file_size_windows(path)
+    }
+    #[cfg(unix)]
+    {
+        get_real_file_size_unix(path)
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        // Fallback to standard metadata for other platforms
+        let metadata = fs::metadata(path)?;
+        Ok(metadata.len())
+    }
+}
+
+#[cfg(windows)]
+fn get_real_file_size_windows(path: &Path) -> io::Result<u64> {
+    
+    // Convert path to wide string for Windows API
+    let wide_path: Vec<u16> = path.as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    
+    unsafe {
+        // Check if it's a directory first
+        let attributes = GetFileAttributesW(wide_path.as_ptr());
+        if attributes != INVALID_FILE_ATTRIBUTES 
+            && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 {
+            return Ok(0); // Directories have no size
+        }
+        
+        // Get compressed file size (actual disk usage)
+        let mut high_part: u32 = 0;
+        let low_part = GetCompressedFileSizeW(wide_path.as_ptr(), &mut high_part);
+        
+        if low_part == INVALID_FILE_SIZE {
+            // Fall back to regular file size if compressed size fails
+            let metadata = fs::metadata(path)?;
+            Ok(metadata.len())
+        } else {
+            // Combine high and low parts to get full 64-bit size
+            let size = ((high_part as u64) << 32) | (low_part as u64);
+            Ok(size)
+        }
+    }
+}
+
+#[cfg(unix)]
+fn get_real_file_size_unix(path: &Path) -> io::Result<u64> {
+    let metadata = fs::metadata(path)?;
+    
+    // On Unix systems, use st_blocks * 512 to get actual disk usage
+    // st_blocks is the number of 512-byte blocks allocated
+    let blocks = metadata.blocks();
+    let block_size = 512u64;
+    
+    // Calculate actual disk usage
+    let disk_usage = blocks * block_size;
+    
+    // Return the smaller of logical size or disk usage
+    // (sparse files can have less disk usage than logical size)
+    let logical_size = metadata.len();
+    Ok(std::cmp::min(disk_usage, logical_size))
+}
 
 /// Base directories to always exclude from the analysis
 const BASE_EXCLUDED_DIRS: [&str; 10] = [
@@ -412,6 +542,91 @@ impl FrameworkDetection {
     }
 }
 
+/// Structure to track excluded files and directories with their sizes
+#[derive(Debug)]
+struct ExcludedStats {
+    /// Total size of all excluded content
+    total_excluded_size: u64,
+    /// Excluded directories with their sizes and file counts
+    excluded_directories: Vec<(String, u64, usize, String)>, // (path, size, file_count, reason)
+    /// Excluded files with their sizes
+    excluded_files: Vec<(String, u64, String)>, // (path, size, reason)
+}
+
+impl ExcludedStats {
+    fn new() -> Self {
+        ExcludedStats {
+            total_excluded_size: 0,
+            excluded_directories: Vec::new(),
+            excluded_files: Vec::new(),
+        }
+    }
+
+    /// Adds an excluded directory with its calculated size and file count
+    fn add_excluded_directory(&mut self, path: &str, size: u64, file_count: usize, reason: &str) {
+        self.total_excluded_size += size;
+        self.excluded_directories.push((path.to_string(), size, file_count, reason.to_string()));
+    }
+
+    /// Adds an excluded file with its size
+    fn add_excluded_file(&mut self, path: &str, size: u64, reason: &str) {
+        self.total_excluded_size += size;
+        self.excluded_files.push((path.to_string(), size, reason.to_string()));
+    }
+
+    /// Formats the exclusion statistics into a human-readable string
+    fn format_excluded_stats(&self) -> String {
+        let mut result = String::new();
+        
+        if self.total_excluded_size == 0 {
+            return result;
+        }
+
+        result.push_str("\nExcluded Content Analysis:\n");
+        result.push_str("==========================\n");
+        result.push_str(&format!("Total excluded content size: {}\n\n", format_size(self.total_excluded_size)));
+
+        // Top 10 largest excluded directories
+        if !self.excluded_directories.is_empty() {
+            result.push_str("Top 10 Largest Excluded Directories:\n");
+            let mut sorted_dirs = self.excluded_directories.clone();
+            sorted_dirs.sort_by(|a, b| b.1.cmp(&a.1));
+            
+            for (i, (path, size, file_count, reason)) in sorted_dirs.iter().take(10).enumerate() {
+                result.push_str(&format!(
+                    "  {}. {} - {} ({} files) - Reason: {}\n",
+                    i + 1,
+                    path,
+                    format_size(*size),
+                    file_count,
+                    reason
+                ));
+            }
+            result.push('\n');
+        }
+
+        // Top 10 largest excluded files
+        if !self.excluded_files.is_empty() {
+            result.push_str("Top 10 Largest Excluded Files:\n");
+            let mut sorted_files = self.excluded_files.clone();
+            sorted_files.sort_by(|a, b| b.1.cmp(&a.1));
+            
+            for (i, (path, size, reason)) in sorted_files.iter().take(10).enumerate() {
+                result.push_str(&format!(
+                    "  {}. {} - {} - Reason: {}\n",
+                    i + 1,
+                    path,
+                    format_size(*size),
+                    reason
+                ));
+            }
+            result.push('\n');
+        }
+
+        result
+    }
+}
+
 /// Structure to track project type and customized exclusions
 struct ProjectDetector {
     /// Set of directories to exclude
@@ -420,6 +635,8 @@ struct ProjectDetector {
     project_types: HashSet<String>,
     /// Framework detector
     framework_detection: FrameworkDetection,
+    /// Exclusion statistics tracker
+    excluded_stats: ExcludedStats,
 }
 
 impl ProjectDetector {
@@ -434,6 +651,7 @@ impl ProjectDetector {
             excluded_dirs,
             project_types: HashSet::new(),
             framework_detection: FrameworkDetection::new(),
+            excluded_stats: ExcludedStats::new(),
         }
     }
 
@@ -590,6 +808,9 @@ impl ProjectDetector {
         // Add framework information
         result.push_str(&self.framework_detection.format_frameworks());
 
+        // Add exclusion statistics
+        result.push_str(&self.excluded_stats.format_excluded_stats());
+
         result
     }
 
@@ -608,7 +829,8 @@ impl ProjectDetector {
 }
 
 /// Structure to track and calculate project statistics
-struct ProjectStats {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProjectStats {
     /// Total number of lines across all files
     total_lines: usize,
     /// Number of code lines (non-blank, non-comment)
@@ -623,10 +845,18 @@ struct ProjectStats {
     files_by_extension: HashMap<String, usize>,
     /// Count of lines by extension
     lines_by_extension: HashMap<String, usize>,
-    /// Total size of all files in bytes
+    /// Total size of all files in bytes (actual file system size)
     total_size_bytes: u64,
+    /// Total content size in bytes (UTF-8 string content size)
+    total_content_size_bytes: u64,
+    /// Size breakdown by file extension
+    size_by_extension: HashMap<String, u64>,
     /// Count of potentially sensitive files
     sensitive_files_count: usize,
+    /// Largest files (path, size) - top 10
+    largest_files: Vec<(String, u64)>,
+    /// Average file size
+    average_file_size: u64,
 }
 
 impl ProjectStats {
@@ -641,7 +871,11 @@ impl ProjectStats {
             files_by_extension: HashMap::new(),
             lines_by_extension: HashMap::new(),
             total_size_bytes: 0,
+            total_content_size_bytes: 0,
+            size_by_extension: HashMap::new(),
             sensitive_files_count: 0,
+            largest_files: Vec::new(),
+            average_file_size: 0,
         }
     }
 
@@ -679,23 +913,37 @@ impl ProjectStats {
             *self.files_by_extension.entry(ext.clone()).or_insert(0) += 1;
         }
 
-        // Get file size
-        if let Ok(metadata) = fs::metadata(path) {
-            self.total_size_bytes += metadata.len();
+        // Get accurate file size information using cross-platform real size detection
+        let mut file_size = 0u64;
+        
+        // Use our enhanced file size detection that accounts for compression, allocation, etc.
+        if let Ok(real_size) = get_real_file_size(path) {
+            file_size = real_size;
+            self.total_size_bytes += file_size;
         }
 
-        // Count lines
+        // Get file extension for size tracking
+        let extension = path.extension()
+            .and_then(OsStr::to_str)
+            .map(|s| s.to_lowercase())
+            .unwrap_or_else(|| "no_extension".to_string());
+
+        // Track size by extension
+        *self.size_by_extension.entry(extension.clone()).or_insert(0) += file_size;
+
+        // Count lines and analyze content
         if let Ok(content) = fs::read_to_string(path) {
             let lines: Vec<_> = content.lines().collect();
             let line_count = lines.len();
 
+            // Calculate content size (UTF-8 bytes)
+            let content_size = content.len() as u64;
+            self.total_content_size_bytes += content_size;
+
             self.total_lines += line_count;
 
             // Track lines by extension
-            if let Some(ext) = path.extension().and_then(OsStr::to_str) {
-                let ext = ext.to_lowercase();
-                *self.lines_by_extension.entry(ext.clone()).or_insert(0) += line_count;
-            }
+            *self.lines_by_extension.entry(extension).or_insert(0) += line_count;
 
             // Count blank lines and comments
             let mut blank = 0;
@@ -715,7 +963,23 @@ impl ProjectStats {
             self.code_lines += line_count - blank - comments;
         }
 
+        // Track largest files (keep top 10)
+        let file_path_str = path.display().to_string();
+        self.largest_files.push((file_path_str, file_size));
+        self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
+        if self.largest_files.len() > 10 {
+            self.largest_files.truncate(10);
+        }
+
         Ok(())
+    }
+
+    /// Finalizes statistics calculations (call after all files are processed)
+    fn finalize(&mut self) {
+        // Calculate average file size
+        if self.total_files > 0 {
+            self.average_file_size = self.total_size_bytes / self.total_files as u64;
+        }
     }
 
     /// Formats the statistics into a human-readable string
@@ -758,9 +1022,20 @@ impl ProjectStats {
             }
         ));
 
-        // Format size in human-readable form
-        let size_str = format_size(self.total_size_bytes);
-        result.push_str(&format!("Total Size: {}\n", size_str));
+        // Enhanced file size information
+        let total_size_str = format_size(self.total_size_bytes);
+        let content_size_str = format_size(self.total_content_size_bytes);
+        let average_size_str = format_size(self.average_file_size);
+        
+        result.push_str(&format!("Total File System Size: {}\n", total_size_str));
+        result.push_str(&format!("Total Content Size: {}\n", content_size_str));
+        result.push_str(&format!("Average File Size: {}\n", average_size_str));
+        
+        // Show compression ratio if there's a difference
+        if self.total_size_bytes > 0 && self.total_content_size_bytes > 0 {
+            let ratio = (self.total_content_size_bytes as f64 / self.total_size_bytes as f64) * 100.0;
+            result.push_str(&format!("Content to File Size Ratio: {:.1}%\n", ratio));
+        }
 
         if self.sensitive_files_count > 0 {
             result.push_str(&format!(
@@ -769,40 +1044,38 @@ impl ProjectStats {
             ));
         }
 
-        // Files by extension
+        // Enhanced files by extension with size information
         result.push_str("\nFiles by Type:\n");
         let mut extensions: Vec<_> = self.files_by_extension.iter().collect();
         extensions.sort_by(|a, b| b.1.cmp(a.1)); // Sort by count (descending)
 
         for (ext, count) in extensions {
             let lines = self.lines_by_extension.get(ext).unwrap_or(&0);
-            result.push_str(&format!("  .{}: {} files, {} lines\n", ext, count, lines));
+            let size = self.size_by_extension.get(ext).unwrap_or(&0);
+            let size_str = format_size(*size);
+            result.push_str(&format!("  .{}: {} files, {} lines, {}\n", ext, count, lines, size_str));
+        }
+
+        // Show largest files
+        if !self.largest_files.is_empty() {
+            result.push_str("\nLargest Files:\n");
+            for (i, (path, size)) in self.largest_files.iter().enumerate() {
+                if i >= 5 { break; } // Show top 5 largest files
+                let size_str = format_size(*size);
+                // Show only the filename, not the full path for readability
+                let filename = std::path::Path::new(path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                result.push_str(&format!("  {}: {}\n", filename, size_str));
+            }
         }
 
         result
     }
 }
 
-/// Formats a byte size into a human-readable string (B, KB, MB, GB)
-///
-/// # Arguments
-///
-/// * `bytes` - Size in bytes
-///
-/// # Returns
-///
-/// * `String` - Formatted size string
-fn format_size(bytes: u64) -> String {
-    if bytes < 1024 {
-        format!("{} bytes", bytes)
-    } else if bytes < 1024 * 1024 {
-        format!("{:.2} KB", bytes as f64 / 1024.0)
-    } else if bytes < 1024 * 1024 * 1024 {
-        format!("{:.2} MB", bytes as f64 / (1024.0 * 1024.0))
-    } else {
-        format!("{:.2} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
-    }
-}
+
 
 /// Determines if a line is likely a comment based on file extension
 ///
@@ -866,20 +1139,49 @@ fn might_contain_sensitive_info(path: &Path, _content: Option<&str>) -> bool {
 
 /// Main entry point of the application
 fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    let start_dir = if args.len() > 1 {
-        PathBuf::from(&args[1])
+    let matches = Command::new("codetree")
+        .version("2.1.0")
+        .author("exyreams")
+        .about("Generate comprehensive project analysis with multiple output formats")
+        .arg(
+            Arg::new("directory")
+                .help("Directory to analyze")
+                .value_name("DIR")
+                .index(1),
+        )
+        .arg(
+            Arg::new("format")
+                .short('f')
+                .long("format")
+                .value_name("FORMAT")
+                .help("Output format: text, json, markdown, html")
+                .default_value("text"),
+        )
+        .arg(
+            Arg::new("output")
+                .short('o')
+                .long("output")
+                .value_name("FILE")
+                .help("Output file name (without extension)"),
+        )
+        .get_matches();
+
+    let start_dir = if let Some(dir) = matches.get_one::<String>("directory") {
+        PathBuf::from(dir)
     } else {
         env::current_dir()?
     };
 
-    let script_name = env::args().next().unwrap();
-    let output_file_name = "codetree.txt";
-    let output_file_path = start_dir.join(output_file_name);
+    let format: OutputFormat = matches
+        .get_one::<String>("format")
+        .unwrap()
+        .parse()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-    if output_file_path.exists() {
-        fs::remove_file(&output_file_path)?;
-    }
+    let output_name = matches
+        .get_one::<String>("output")
+        .map(|s| s.as_str())
+        .unwrap_or("codetree");
 
     // Initialize project detector and detect project types
     let mut project_detector = ProjectDetector::new();
@@ -888,81 +1190,106 @@ fn main() -> io::Result<()> {
     println!("{}", project_detector.format_project_info());
 
     let mut file_paths = Vec::new();
-    let mut output = String::new();
+    let mut file_tree_output = String::new();
     let mut stats = ProjectStats::new();
 
     println!("Generating file tree for {}...", start_dir.display());
-    output.push_str("Project File Tree:\n\n");
-    output.push_str(&project_detector.format_project_info());
 
     get_file_tree_and_contents(
         &start_dir,
         0,
         &mut file_paths,
-        &mut output,
-        &script_name,
-        output_file_name,
+        &mut file_tree_output,
+        &env::args().next().unwrap(),
+        &format!("{}.{}", output_name, get_generator(&format).file_extension()),
         &mut stats,
-        &project_detector,
+        &mut project_detector,
     )?;
 
-    // Add statistics after the file tree
-    output.push_str(&stats.format_stats());
-
-    output.push_str("\nProject Codes:\n\n");
-
-    for (i, file) in file_paths.iter().enumerate() {
+    // Collect file information
+    let mut files = Vec::new();
+    for (i, file_path) in file_paths.iter().enumerate() {
         let progress = (i + 1) as f32 / file_paths.len() as f32 * 100.0;
         print!("\rProcessing Files: {}% Complete", progress as u32);
         io::stdout().flush()?;
 
-        if file.file_name().unwrap_or_default().to_str() == Some(&script_name)
-            || file.file_name().unwrap_or_default() == OsStr::new(output_file_name)
-            || is_excluded_file(file)
-        {
-            continue;
-        }
+        let relative_path = file_path
+            .strip_prefix(&start_dir)
+            .unwrap_or(file_path)
+            .display()
+            .to_string();
 
-        output.push_str(&format!(
-            "{}. {}\n",
-            i + 1,
-            file.strip_prefix(&start_dir).unwrap_or(file).display()
-        ));
+        let is_sensitive = might_contain_sensitive_info(file_path, None);
+        let mut content = None;
+        let mut size_bytes = 0;
+        let mut line_count = 0;
 
-        if file.exists() {
-            match fs::read_to_string(file) {
-                Ok(content) => {
-                    output.push_str("\n");
-
-                    // Check if file might contain sensitive information
-                    if might_contain_sensitive_info(file, Some(&content)) {
-                        output.push_str(
-                            "[Content hidden to protect potential sensitive information]\n",
-                        );
-                    } else {
-                        output.push_str(&content);
-                    }
-
-                    output.push_str("\n");
-                }
-                Err(_) => output.push_str(" (Unable to read file content)\n"),
+        if file_path.exists() {
+            if let Ok(metadata) = fs::metadata(file_path) {
+                size_bytes = metadata.len();
             }
-        } else {
-            output.push_str(" (File not found)\n");
+
+            if !is_sensitive {
+                if let Ok(file_content) = fs::read_to_string(file_path) {
+                    line_count = file_content.lines().count();
+                    content = Some(file_content);
+                }
+            }
         }
-        output.push('\n');
+
+        files.push(FileInfo {
+            path: file_path.display().to_string(),
+            relative_path,
+            content,
+            is_sensitive,
+            size_bytes,
+            line_count,
+        });
+    }
+
+    // Create project report
+    let report = ProjectReport {
+        project_info: project_detector.format_project_info(),
+        file_tree: file_tree_output,
+        statistics: stats,
+        files,
+        generated_at: chrono::Utc::now(),
+    };
+
+    // Generate output using the appropriate generator
+    let generator = get_generator(&format);
+    let output_content = generator
+        .generate(&report)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))?;
+
+    // Write output file
+    let output_file_path = start_dir.join(format!("{}.{}", output_name, generator.file_extension()));
+    
+    if output_file_path.exists() {
+        fs::remove_file(&output_file_path)?;
     }
 
     println!("\nWriting to file...");
-    fs::write(&output_file_path, output)?;
+    fs::write(&output_file_path, output_content)?;
 
     // Display summary statistics in terminal
-    println!("{}", stats.format_stats());
+    println!("{}", report.statistics.format_stats());
     println!(
-        "File tree and contents have been written to {}",
+        "Analysis complete! Report written to {}",
         output_file_path.display()
     );
+
     Ok(())
+}
+
+/// Returns the appropriate output generator for the given format
+fn get_generator(format: &OutputFormat) -> Box<dyn OutputGenerator> {
+    match format {
+        OutputFormat::Text => Box::new(TextGenerator),
+        OutputFormat::Json => Box::new(JsonGenerator),
+        OutputFormat::Markdown => Box::new(MarkdownGenerator),
+        OutputFormat::Html => Box::new(HtmlGenerator),
+    }
 }
 
 /// Recursively generates a file tree and collects file paths
@@ -989,7 +1316,7 @@ fn get_file_tree_and_contents(
     script_name: &str,
     output_file_name: &str,
     stats: &mut ProjectStats,
-    project_detector: &ProjectDetector,
+    project_detector: &mut ProjectDetector,
 ) -> io::Result<()> {
     let indent = "│   ".repeat(depth);
     let last_indent = if depth > 0 {
@@ -998,13 +1325,46 @@ fn get_file_tree_and_contents(
         String::new()
     };
 
-    let mut entries: Vec<_> = WalkDir::new(dir)
+    // First collect all entries without filtering to track excluded ones
+    let all_entries: Vec<_> = WalkDir::new(dir)
         .min_depth(1)
         .max_depth(1)
         .into_iter()
-        .filter_entry(|e| !is_excluded(e, project_detector))
         .filter_map(|e| e.ok())
         .collect();
+
+    // Separate included and excluded entries
+    let mut entries = Vec::new();
+    for entry in all_entries {
+        if is_excluded(&entry, project_detector) {
+            // Track excluded directory
+            if entry.file_type().is_dir() {
+                let dir_name = entry.file_name().to_str().unwrap_or("");
+                let reason = get_exclusion_reason(dir_name, project_detector);
+                if let Ok((size, file_count)) = calculate_directory_size(entry.path()) {
+                    project_detector.excluded_stats.add_excluded_directory(
+                        &entry.path().display().to_string(),
+                        size,
+                        file_count,
+                        &reason,
+                    );
+                }
+            }
+        } else if is_excluded_file(entry.path()) {
+            // Track excluded file
+            let file_name = entry.file_name().to_str().unwrap_or("");
+            let reason = get_file_exclusion_reason(file_name);
+            if let Ok(size) = get_real_file_size(entry.path()) {
+                project_detector.excluded_stats.add_excluded_file(
+                    &entry.path().display().to_string(),
+                    size,
+                    &reason,
+                );
+            }
+        } else {
+            entries.push(entry);
+        }
+    }
 
     entries.sort_by_key(|a| {
         (
@@ -1017,10 +1377,7 @@ fn get_file_tree_and_contents(
         let is_last = i == entries.len() - 1;
         let file_name = entry.file_name().to_string_lossy();
 
-        if file_name == script_name
-            || file_name == output_file_name
-            || is_excluded_file(entry.path())
-        {
+        if file_name == script_name || file_name == output_file_name {
             continue;
         }
 
@@ -1088,4 +1445,47 @@ fn is_excluded(entry: &DirEntry, project_detector: &ProjectDetector) -> bool {
 /// * `bool` - True if the file should be excluded
 fn is_excluded_file(path: &Path) -> bool {
     EXCLUDED_FILES.contains(&path.file_name().unwrap_or_default().to_str().unwrap_or(""))
+}
+/// Gets the exclusion reason for a directory
+fn get_exclusion_reason(dir_name: &str, project_detector: &ProjectDetector) -> String {
+    if BASE_EXCLUDED_DIRS.contains(&dir_name) {
+        "Base excluded directory".to_string()
+    } else if project_detector.excluded_dirs.contains(dir_name) {
+        match dir_name {
+            "target" => "Rust/Java build directory".to_string(),
+            "node_modules" => "Node.js dependencies".to_string(),
+            "dist" | "build" => "Build output directory".to_string(),
+            "__pycache__" => "Python cache directory".to_string(),
+            ".pytest_cache" => "Pytest cache directory".to_string(),
+            "venv" => "Python virtual environment".to_string(),
+            ".gradle" => "Gradle cache directory".to_string(),
+            "bin" | "obj" => ".NET build directory".to_string(),
+            "vendor" => "Dependencies directory".to_string(),
+            "assets" | "asset" | "public" => "Static assets directory".to_string(),
+            _ => "Project-specific excluded directory".to_string(),
+        }
+    } else {
+        "Unknown exclusion reason".to_string()
+    }
+}
+
+/// Gets the exclusion reason for a file
+fn get_file_exclusion_reason(file_name: &str) -> String {
+    match file_name {
+        ".DS_Store" => "macOS system file".to_string(),
+        ".env" | ".env.local" | ".env.development" | ".env.production" | ".env.test" => "Environment configuration file".to_string(),
+        ".eslintrc.json" | "eslint.config.js" => "ESLint configuration".to_string(),
+        ".gitignore" | ".npmignore" => "Version control ignore file".to_string(),
+        "Cargo.lock" | "package-lock.json" | "pnpm-lock.yaml" | "yarn.lock" => "Dependency lock file".to_string(),
+        "favicon.ico" => "Website icon file".to_string(),
+        "globals.css" => "Global CSS file".to_string(),
+        "next.config.mjs" | "next-env.d.ts" => "Next.js configuration".to_string(),
+        "postcss.config.js" | "postcss.config.mjs" => "PostCSS configuration".to_string(),
+        "README.md" => "Documentation file".to_string(),
+        "tailwind.config.js" | "tailwind.config.ts" => "Tailwind CSS configuration".to_string(),
+        "tsconfig.app.json" | "tsconfig.node.json" | "tsconfig.json" => "TypeScript configuration".to_string(),
+        "thumbs.db" => "Windows thumbnail cache".to_string(),
+        "vite.config.ts" => "Vite configuration".to_string(),
+        _ => "Configuration/system file".to_string(),
+    }
 }
